@@ -142,7 +142,8 @@ local function CreateControls(parent)
     unlockLabel:SetJustifyH("LEFT")
     unlockLabel:SetText(LABEL_TEXT)
 
-    local checkboxText = _G[unlockCheckbox:GetName() .. "Text"]
+    local checkboxName = unlockCheckbox.GetName and unlockCheckbox:GetName()
+    local checkboxText = unlockCheckbox.Text or (checkboxName and _G[checkboxName .. "Text"]) or nil
     if checkboxText then
         checkboxText:SetText("")
         checkboxText:Hide()
