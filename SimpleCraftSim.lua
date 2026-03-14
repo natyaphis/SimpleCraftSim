@@ -2,11 +2,10 @@ local ADDON_NAME = ...
 
 local frame = CreateFrame("Frame")
 local REAGENT_COUNT_OVERRIDE = 999
-local BUTTON_SIZE = 24
-local BUTTON_Y_OFFSET = -6
-local BUTTON_TEXT_OFFSET_X = 4
-local BUTTON_TEXT_OFFSET_Y = 1
-local RETRY_DELAY = 0.1
+local CHECKBOX_TOP_OFFSET = -6
+local CHECKBOX_SIZE = 24
+local LABEL_OFFSET_X = 0
+local LABEL_TEXT = (GetLocale() == "zhCN" or GetLocale() == "zhTW") and "解锁" or "Unlock"
 
 local defaults = {
     enabled = false,
@@ -14,9 +13,9 @@ local defaults = {
 
 local db
 local originalGetCraftingReagentCount
-local unlockButton
-local locale = GetLocale()
-local buttonLabel = (locale == "zhCN" or locale == "zhTW") and "解锁" or "Unlock"
+local unlockCheckbox
+local unlockLabel
+local isElvUISkinned = false
 
 local function CopyDefaults(target, source)
     for key, value in pairs(source) do
@@ -47,11 +46,6 @@ end
 local function GetSchematicForm()
     local craftingPage = GetCraftingPage()
     return craftingPage and craftingPage.SchematicForm or nil
-end
-
-local function GetTrackRecipeCheckbox()
-    local schematicForm = GetSchematicForm()
-    return schematicForm and schematicForm.TrackRecipeCheckbox or nil
 end
 
 local function SafeCallMethod(object, methodName, ...)
@@ -100,16 +94,19 @@ local function ApplyOverride()
     end
 end
 
-local function UpdateButtonState()
-    if not unlockButton then
-        return
-    end
-
-    unlockButton:SetChecked(GetDB().enabled)
+local function GetTrackRecipeCheckbox()
+    local schematicForm = GetSchematicForm()
+    return schematicForm and schematicForm.TrackRecipeCheckbox or nil
 end
 
-local function ApplyElvUISkin(trackCheckbox)
-    if not unlockButton then
+local function UpdateControlState()
+    if unlockCheckbox then
+        unlockCheckbox:SetChecked(GetDB().enabled)
+    end
+end
+
+local function ApplyElvUISkin()
+    if isElvUISkinned or not unlockCheckbox then
         return
     end
 
@@ -119,89 +116,72 @@ local function ApplyElvUISkin(trackCheckbox)
     end
 
     local S = E.GetModule and E:GetModule("Skins", true)
-    if not S or not S.HandleCheckBox then
+    if not S then
         return
     end
 
-    if not unlockButton.IsSkinned then
-        S:HandleCheckBox(unlockButton)
+    if S.HandleCheckBox then
+        S:HandleCheckBox(unlockCheckbox)
+        unlockCheckbox:SetSize(CHECKBOX_SIZE, CHECKBOX_SIZE)
     end
 
-    local size = trackCheckbox and trackCheckbox:GetWidth() or BUTTON_SIZE
-    if size <= 0 then
-        size = BUTTON_SIZE
-    end
-    unlockButton:SetSize(size, size)
+    isElvUISkinned = true
 end
 
-local function ApplyButtonTextStyle(trackCheckbox)
-    local buttonText = _G[unlockButton:GetName() .. "Text"]
-    local trackText = _G[trackCheckbox:GetName() .. "Text"]
-    if not buttonText or not trackText then
+local function CreateControls(parent)
+    if unlockCheckbox then
         return
     end
 
-    buttonText:ClearAllPoints()
-    buttonText:SetPoint("LEFT", unlockButton, "RIGHT", BUTTON_TEXT_OFFSET_X, BUTTON_TEXT_OFFSET_Y)
-    buttonText:SetFontObject(trackText:GetFontObject())
-    buttonText:SetTextColor(trackText:GetTextColor())
-end
+    unlockCheckbox = CreateFrame("CheckButton", "SimpleCraftSimUnlockCheckbox", parent, "UICheckButtonTemplate")
+    unlockCheckbox:SetSize(CHECKBOX_SIZE, CHECKBOX_SIZE)
+    unlockCheckbox:SetHitRectInsets(0, 0, 0, 0)
 
-local function StyleButtonLikeTrackCheckbox(trackCheckbox)
-    unlockButton:ClearAllPoints()
-    unlockButton:SetPoint("TOPLEFT", trackCheckbox, "BOTTOMLEFT", 0, BUTTON_Y_OFFSET)
-    unlockButton:SetScale(trackCheckbox:GetScale())
+    unlockLabel = parent:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    unlockLabel:SetPoint("LEFT", unlockCheckbox, "RIGHT", LABEL_OFFSET_X, 0)
+    unlockLabel:SetJustifyH("LEFT")
+    unlockLabel:SetText(LABEL_TEXT)
 
-    local size = trackCheckbox:GetWidth()
-    if size and size > 0 then
-        unlockButton:SetSize(size, size)
-    else
-        unlockButton:SetSize(BUTTON_SIZE, BUTTON_SIZE)
+    local checkboxText = _G[unlockCheckbox:GetName() .. "Text"]
+    if checkboxText then
+        checkboxText:SetText("")
+        checkboxText:Hide()
     end
 
-    ApplyButtonTextStyle(trackCheckbox)
-    ApplyElvUISkin(trackCheckbox)
+    unlockCheckbox:SetScript("OnClick", function(self)
+        local currentDB = GetDB()
+        currentDB.enabled = not not self:GetChecked()
+        ApplyOverride()
+        RefreshCraftingForm()
+    end)
+
+    ApplyElvUISkin()
 end
 
-local function CreateUnlockButton(parent)
-    if not unlockButton then
-        unlockButton = CreateFrame("CheckButton", "SimpleCraftSimUnlockButton", parent, "UICheckButtonTemplate")
-        unlockButton:SetHitRectInsets(0, 0, 0, 0)
-
-        local text = _G[unlockButton:GetName() .. "Text"]
-        if text then
-            text:SetText(buttonLabel)
-        end
-
-        unlockButton:SetScript("OnClick", function(self)
-            local db = GetDB()
-            db.enabled = not not self:GetChecked()
-            ApplyOverride()
-            RefreshCraftingForm()
-        end)
-    end
-end
-
-local function EnsureButton()
+local function EnsureControls()
     local schematicForm = GetSchematicForm()
-    local trackCheckbox = schematicForm and schematicForm.TrackRecipeCheckbox
+    local trackCheckbox = GetTrackRecipeCheckbox()
     if not schematicForm or not trackCheckbox then
         return
     end
 
-    CreateUnlockButton(schematicForm)
-    StyleButtonLikeTrackCheckbox(trackCheckbox)
-    UpdateButtonState()
-    unlockButton:Show()
-end
+    CreateControls(schematicForm)
 
-local function ScheduleEnsureButton(delay)
-    C_Timer.After(delay or 0, EnsureButton)
+    unlockCheckbox:ClearAllPoints()
+    unlockCheckbox:SetPoint("TOPLEFT", trackCheckbox, "BOTTOMLEFT", 0, CHECKBOX_TOP_OFFSET)
+    unlockCheckbox:SetSize(CHECKBOX_SIZE, CHECKBOX_SIZE)
+    unlockCheckbox:Show()
+
+    unlockLabel:ClearAllPoints()
+    unlockLabel:SetPoint("LEFT", unlockCheckbox, "RIGHT", LABEL_OFFSET_X, 0)
+    unlockLabel:Show()
+
+    UpdateControlState()
+    ApplyElvUISkin()
 end
 
 local function HookProfessionsFrame()
     local schematicForm = GetSchematicForm()
-    local trackCheckbox = schematicForm and schematicForm.TrackRecipeCheckbox
     if not schematicForm or schematicForm.SimpleCraftSimHooked then
         return
     end
@@ -209,22 +189,17 @@ local function HookProfessionsFrame()
     schematicForm.SimpleCraftSimHooked = true
 
     if schematicForm.HookScript then
-        schematicForm:HookScript("OnShow", EnsureButton)
+        schematicForm:HookScript("OnShow", EnsureControls)
     end
 
     if schematicForm.Init then
         hooksecurefunc(schematicForm, "Init", function()
-            ScheduleEnsureButton()
+            C_Timer.After(0, EnsureControls)
         end)
     end
 
-    if trackCheckbox and trackCheckbox.HookScript then
-        trackCheckbox:HookScript("OnShow", EnsureButton)
-        trackCheckbox:HookScript("OnSizeChanged", EnsureButton)
-    end
-
-    EnsureButton()
-    ScheduleEnsureButton(RETRY_DELAY)
+    EnsureControls()
+    C_Timer.After(0.1, EnsureControls)
 end
 
 frame:RegisterEvent("ADDON_LOADED")
@@ -234,10 +209,10 @@ frame:SetScript("OnEvent", function(_, event, arg1)
         if arg1 == ADDON_NAME then
             GetDB()
         elseif arg1 == "Blizzard_Professions" then
-            ScheduleEnsureButton()
             C_Timer.After(0, HookProfessionsFrame)
         elseif arg1 == "ElvUI" then
-            ScheduleEnsureButton()
+            isElvUISkinned = false
+            C_Timer.After(0, EnsureControls)
         end
     elseif event == "PLAYER_LOGIN" then
         ApplyOverride()
