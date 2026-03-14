@@ -1,0 +1,11 @@
+## Interface: 120001, 120000
+## Title: SimpleCraftSim
+## Notes: Adds a crafting unlock toggle to the professions crafting UI
+## Notes-zhCN: 在专业制造界面添加解锁按钮
+## Author: NatYaphis
+## Version: 0.1.0
+## SavedVariables: SimpleCraftSimDB
+## Category: Professions
+## Category-zhCN: 商业技能
+
+SimpleCraftSim.lua
