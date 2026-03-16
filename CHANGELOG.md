@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.0.6
+
+- Fixed unlock mode for spark-style modified reagent slots by forcing item-based flyout entries to appear even without a bag instance
+- Fixed unlock mode for dependent reagent chains so spark and crest slots no longer stay disabled behind Blizzard dependency checks
+
 ## 1.0.5
 
 - Fixed unlock mode for crest-style currency reagents shown in the character currency tab by overriding currency quantities as well as item counts

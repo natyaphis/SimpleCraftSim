@@ -15,6 +15,8 @@ local db
 local originalGetCraftingReagentCount
 local originalGetCurrencyInfo
 local originalGetReagentSlotStatus
+local originalGenerateItemsFromEligibleItemSlots
+local originalAreDependentReagentsAllocated
 local unlockCheckbox
 local unlockLabel
 local isElvUISkinned = false
@@ -97,6 +99,14 @@ local function ApplyOverride()
     if type(professions) == "table" and type(professions.GetReagentSlotStatus) == "function" and not originalGetReagentSlotStatus then
         originalGetReagentSlotStatus = professions.GetReagentSlotStatus
     end
+    if type(professions) == "table" and type(professions.GenerateItemsFromEligibleItemSlots) == "function" and not originalGenerateItemsFromEligibleItemSlots then
+        originalGenerateItemsFromEligibleItemSlots = professions.GenerateItemsFromEligibleItemSlots
+    end
+
+    local transactionMixin = _G.ProfessionsRecipeTransactionMixin
+    if type(transactionMixin) == "table" and type(transactionMixin.AreDependentReagentsAllocated) == "function" and not originalAreDependentReagentsAllocated then
+        originalAreDependentReagentsAllocated = transactionMixin.AreDependentReagentsAllocated
+    end
 
     if currentDB.enabled and originalGetCraftingReagentCount then
         itemUtil.GetCraftingReagentCount = function()
@@ -127,6 +137,45 @@ local function ApplyOverride()
         end
     elseif originalGetReagentSlotStatus and professions then
         professions.GetReagentSlotStatus = originalGetReagentSlotStatus
+    end
+
+    if currentDB.enabled and originalGenerateItemsFromEligibleItemSlots and professions then
+        professions.GenerateItemsFromEligibleItemSlots = function(reagents, filterAvailable)
+            local items = originalGenerateItemsFromEligibleItemSlots(reagents, filterAvailable)
+            if type(reagents) ~= "table" then
+                return items
+            end
+
+            local seenItemIDs = {}
+            for _, item in ipairs(items) do
+                if item and item.GetItemID then
+                    local itemID = item:GetItemID()
+                    if itemID then
+                        seenItemIDs[itemID] = true
+                    end
+                end
+            end
+
+            for _, reagent in ipairs(reagents) do
+                local itemID = reagent and reagent.itemID
+                if itemID and not seenItemIDs[itemID] then
+                    table.insert(items, Item:CreateFromItemID(itemID))
+                    seenItemIDs[itemID] = true
+                end
+            end
+
+            return items
+        end
+    elseif originalGenerateItemsFromEligibleItemSlots and professions then
+        professions.GenerateItemsFromEligibleItemSlots = originalGenerateItemsFromEligibleItemSlots
+    end
+
+    if currentDB.enabled and originalAreDependentReagentsAllocated and transactionMixin then
+        transactionMixin.AreDependentReagentsAllocated = function()
+            return true
+        end
+    elseif originalAreDependentReagentsAllocated and transactionMixin then
+        transactionMixin.AreDependentReagentsAllocated = originalAreDependentReagentsAllocated
     end
 end
 
