@@ -55,6 +55,30 @@ local function SafeCallMethod(object, methodName, ...)
     end
 end
 
+local function RefreshReagentSlot(slot)
+    if not slot then
+        return
+    end
+
+    SafeCallMethod(slot, "Update")
+    SafeCallMethod(slot, "Refresh")
+    SafeCallMethod(slot, "UpdateState")
+    SafeCallMethod(slot, "UpdateLock")
+    SafeCallMethod(slot, "UpdateQuantity")
+    SafeCallMethod(slot, "UpdateReagent")
+    SafeCallMethod(slot, "UpdateText")
+end
+
+local function RefreshReagentSlotPool(pool)
+    if not pool or not pool.EnumerateActive then
+        return
+    end
+
+    for slot in pool:EnumerateActive() do
+        RefreshReagentSlot(slot)
+    end
+end
+
 local function RefreshCraftingForm()
     local schematicForm = GetSchematicForm()
     if not schematicForm or not schematicForm:IsShown() then
@@ -65,6 +89,13 @@ local function RefreshCraftingForm()
     SafeCallMethod(schematicForm, "UpdateOutputIcon")
     SafeCallMethod(schematicForm, "UpdateResultData")
     SafeCallMethod(schematicForm, "UpdateCreateButton")
+    SafeCallMethod(schematicForm, "UpdateRecipeName")
+    SafeCallMethod(schematicForm, "UpdateQuantitySpinner")
+    SafeCallMethod(schematicForm, "Layout")
+
+    RefreshReagentSlotPool(schematicForm.reagentSlotPool)
+    RefreshReagentSlotPool(schematicForm.optionalReagentSlotPool)
+    RefreshReagentSlotPool(schematicForm.finishingReagentSlotPool)
 
     local event = _G.ProfessionsRecipeSchematicFormMixin
         and _G.ProfessionsRecipeSchematicFormMixin.Event
@@ -154,6 +185,8 @@ local function CreateControls(parent)
         currentDB.enabled = not not self:GetChecked()
         ApplyOverride()
         RefreshCraftingForm()
+        C_Timer.After(0, RefreshCraftingForm)
+        C_Timer.After(0.05, RefreshCraftingForm)
     end)
 
     ApplyElvUISkin()
