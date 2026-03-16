@@ -17,6 +17,8 @@ local originalGetCurrencyInfo
 local originalGetReagentSlotStatus
 local originalGenerateItemsFromEligibleItemSlots
 local originalAreDependentReagentsAllocated
+local originalCreateProfessionsMCRFlyout
+local originalCreateProfessionsOrderMCRFlyout
 local unlockCheckbox
 local unlockLabel
 local isElvUISkinned = false
@@ -83,6 +85,33 @@ local function RefreshCraftingForm()
     end
 end
 
+local function WrapMCRFlyoutBehavior(behavior)
+    if not behavior or behavior.SimpleCraftSimWrapped then
+        return behavior
+    end
+
+    behavior.SimpleCraftSimWrapped = true
+
+    behavior.IsElementValid = function()
+        return true
+    end
+
+    behavior.IsElementEnabled = function(self, elementData, count)
+        if not elementData or not elementData.reagent then
+            return false
+        end
+
+        local transaction = self.GetTransaction and self:GetTransaction() or nil
+        if transaction and transaction.HasAllocatedReagent and transaction:HasAllocatedReagent(elementData.reagent) then
+            return false
+        end
+
+        return (tonumber(count) or 0) > 0
+    end
+
+    return behavior
+end
+
 local function ApplyOverride()
     local currentDB = GetDB()
     local itemUtil = _G.ItemUtil
@@ -106,6 +135,14 @@ local function ApplyOverride()
     local transactionMixin = _G.ProfessionsRecipeTransactionMixin
     if type(transactionMixin) == "table" and type(transactionMixin.AreDependentReagentsAllocated) == "function" and not originalAreDependentReagentsAllocated then
         originalAreDependentReagentsAllocated = transactionMixin.AreDependentReagentsAllocated
+    end
+
+    if type(_G.CreateProfessionsMCRFlyout) == "function" and not originalCreateProfessionsMCRFlyout then
+        originalCreateProfessionsMCRFlyout = _G.CreateProfessionsMCRFlyout
+    end
+
+    if type(_G.CreateProfessionsOrderMCRFlyout) == "function" and not originalCreateProfessionsOrderMCRFlyout then
+        originalCreateProfessionsOrderMCRFlyout = _G.CreateProfessionsOrderMCRFlyout
     end
 
     if currentDB.enabled and originalGetCraftingReagentCount then
@@ -141,21 +178,12 @@ local function ApplyOverride()
 
     if currentDB.enabled and originalGenerateItemsFromEligibleItemSlots and professions then
         professions.GenerateItemsFromEligibleItemSlots = function(reagents, filterAvailable)
-            local items = originalGenerateItemsFromEligibleItemSlots(reagents, filterAvailable)
             if type(reagents) ~= "table" then
-                return items
+                return originalGenerateItemsFromEligibleItemSlots(reagents, filterAvailable)
             end
 
+            local items = {}
             local seenItemIDs = {}
-            for _, item in ipairs(items) do
-                if item and item.GetItemID then
-                    local itemID = item:GetItemID()
-                    if itemID then
-                        seenItemIDs[itemID] = true
-                    end
-                end
-            end
-
             for _, reagent in ipairs(reagents) do
                 local itemID = reagent and reagent.itemID
                 if itemID and not seenItemIDs[itemID] then
@@ -176,6 +204,22 @@ local function ApplyOverride()
         end
     elseif originalAreDependentReagentsAllocated and transactionMixin then
         transactionMixin.AreDependentReagentsAllocated = originalAreDependentReagentsAllocated
+    end
+
+    if currentDB.enabled and originalCreateProfessionsMCRFlyout then
+        _G.CreateProfessionsMCRFlyout = function(...)
+            return WrapMCRFlyoutBehavior(originalCreateProfessionsMCRFlyout(...))
+        end
+    elseif originalCreateProfessionsMCRFlyout then
+        _G.CreateProfessionsMCRFlyout = originalCreateProfessionsMCRFlyout
+    end
+
+    if currentDB.enabled and originalCreateProfessionsOrderMCRFlyout then
+        _G.CreateProfessionsOrderMCRFlyout = function(...)
+            return WrapMCRFlyoutBehavior(originalCreateProfessionsOrderMCRFlyout(...))
+        end
+    elseif originalCreateProfessionsOrderMCRFlyout then
+        _G.CreateProfessionsOrderMCRFlyout = originalCreateProfessionsOrderMCRFlyout
     end
 end
 

@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.0.7
+
+- Fixed unlock mode for recipes that require four sparks by overriding the modified reagent flyout enable check instead of only changing the displayed quantity
+
 ## 1.0.6
 
 - Fixed unlock mode for spark-style modified reagent slots by forcing item-based flyout entries to appear even without a bag instance
