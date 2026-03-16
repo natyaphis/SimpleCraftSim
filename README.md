@@ -9,4 +9,4 @@ The checkbox label is localized for English and Chinese clients.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+All Rights Reserved. See [LICENSE](LICENSE).
