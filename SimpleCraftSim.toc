@@ -3,7 +3,7 @@
 ## Notes: Adds a crafting unlock toggle to the professions crafting UI
 ## Notes-zhCN: 在专业制造界面添加解锁按钮
 ## Author: NatYaphis
-## Version: 1.0.2
+## Version: 1.0.5
 ## SavedVariables: SimpleCraftSimDB
 ## IconTexture: Interface\AddOns\SimpleCraftSim\Media\Icon
 ## Category: Professions

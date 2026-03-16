@@ -13,6 +13,8 @@ local defaults = {
 
 local db
 local originalGetCraftingReagentCount
+local originalGetCurrencyInfo
+local originalGetReagentSlotStatus
 local unlockCheckbox
 local unlockLabel
 local isElvUISkinned = false
@@ -55,47 +57,21 @@ local function SafeCallMethod(object, methodName, ...)
     end
 end
 
-local function RefreshReagentSlot(slot)
-    if not slot then
-        return
-    end
-
-    SafeCallMethod(slot, "Update")
-    SafeCallMethod(slot, "Refresh")
-    SafeCallMethod(slot, "UpdateState")
-    SafeCallMethod(slot, "UpdateLock")
-    SafeCallMethod(slot, "UpdateQuantity")
-    SafeCallMethod(slot, "UpdateReagent")
-    SafeCallMethod(slot, "UpdateText")
-end
-
-local function RefreshReagentSlotPool(pool)
-    if not pool or not pool.EnumerateActive then
-        return
-    end
-
-    for slot in pool:EnumerateActive() do
-        RefreshReagentSlot(slot)
-    end
-end
-
 local function RefreshCraftingForm()
     local schematicForm = GetSchematicForm()
     if not schematicForm or not schematicForm:IsShown() then
         return
     end
 
+    SafeCallMethod(schematicForm, "UpdateAllSlots")
+    SafeCallMethod(schematicForm, "OnAllocationsChanged")
     SafeCallMethod(schematicForm, "UpdateReagentSlots")
     SafeCallMethod(schematicForm, "UpdateOutputIcon")
+    SafeCallMethod(schematicForm, "UpdateOutputItem")
     SafeCallMethod(schematicForm, "UpdateResultData")
+    SafeCallMethod(schematicForm, "UpdateDetailsStats")
     SafeCallMethod(schematicForm, "UpdateCreateButton")
-    SafeCallMethod(schematicForm, "UpdateRecipeName")
-    SafeCallMethod(schematicForm, "UpdateQuantitySpinner")
     SafeCallMethod(schematicForm, "Layout")
-
-    RefreshReagentSlotPool(schematicForm.reagentSlotPool)
-    RefreshReagentSlotPool(schematicForm.optionalReagentSlotPool)
-    RefreshReagentSlotPool(schematicForm.finishingReagentSlotPool)
 
     local event = _G.ProfessionsRecipeSchematicFormMixin
         and _G.ProfessionsRecipeSchematicFormMixin.Event
@@ -108,20 +84,49 @@ end
 local function ApplyOverride()
     local currentDB = GetDB()
     local itemUtil = _G.ItemUtil
-    if type(itemUtil) ~= "table" then
-        return
-    end
-
-    if type(itemUtil.GetCraftingReagentCount) == "function" and not originalGetCraftingReagentCount then
+    if type(itemUtil) == "table" and type(itemUtil.GetCraftingReagentCount) == "function" and not originalGetCraftingReagentCount then
         originalGetCraftingReagentCount = itemUtil.GetCraftingReagentCount
     end
 
-    if currentDB.enabled then
+    local currencyInfoAPI = _G.C_CurrencyInfo
+    if type(currencyInfoAPI) == "table" and type(currencyInfoAPI.GetCurrencyInfo) == "function" and not originalGetCurrencyInfo then
+        originalGetCurrencyInfo = currencyInfoAPI.GetCurrencyInfo
+    end
+
+    local professions = _G.Professions
+    if type(professions) == "table" and type(professions.GetReagentSlotStatus) == "function" and not originalGetReagentSlotStatus then
+        originalGetReagentSlotStatus = professions.GetReagentSlotStatus
+    end
+
+    if currentDB.enabled and originalGetCraftingReagentCount then
         itemUtil.GetCraftingReagentCount = function()
             return REAGENT_COUNT_OVERRIDE
         end
     elseif originalGetCraftingReagentCount then
         itemUtil.GetCraftingReagentCount = originalGetCraftingReagentCount
+    end
+
+    if currentDB.enabled and originalGetCurrencyInfo and currencyInfoAPI then
+        currencyInfoAPI.GetCurrencyInfo = function(currencyID)
+            local info = originalGetCurrencyInfo(currencyID)
+            if type(info) ~= "table" then
+                return info
+            end
+
+            local overriddenInfo = CopyTable(info)
+            overriddenInfo.quantity = math.max(tonumber(info.quantity) or 0, REAGENT_COUNT_OVERRIDE)
+            return overriddenInfo
+        end
+    elseif originalGetCurrencyInfo and currencyInfoAPI then
+        currencyInfoAPI.GetCurrencyInfo = originalGetCurrencyInfo
+    end
+
+    if currentDB.enabled and originalGetReagentSlotStatus and professions then
+        professions.GetReagentSlotStatus = function()
+            return false, nil
+        end
+    elseif originalGetReagentSlotStatus and professions then
+        professions.GetReagentSlotStatus = originalGetReagentSlotStatus
     end
 end
 
@@ -242,7 +247,8 @@ frame:SetScript("OnEvent", function(_, event, arg1)
     if event == "ADDON_LOADED" then
         if arg1 == ADDON_NAME then
             GetDB()
-        elseif arg1 == "Blizzard_Professions" then
+        elseif arg1 == "Blizzard_Professions" or arg1 == "Blizzard_ProfessionsTemplates" then
+            ApplyOverride()
             C_Timer.After(0, HookProfessionsFrame)
         elseif arg1 == "ElvUI" then
             isElvUISkinned = false

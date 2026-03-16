@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.0.5
+
+- Fixed unlock mode for crest-style currency reagents shown in the character currency tab by overriding currency quantities as well as item counts
+- Fixed unlock mode to bypass Blizzard's reagent-slot lock check so optional crest slots can actually be opened
+- Restored immediate UI refresh when toggling unlock without reintroducing the slot relock issue
+
 ## 1.0.2
 
 - Refreshed the professions schematic form and active reagent slots immediately when toggling the unlock checkbox
