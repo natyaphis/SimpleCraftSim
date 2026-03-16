@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.0.2
+
+- Refreshed the professions schematic form and active reagent slots immediately when toggling the unlock checkbox
+- Made reagent lock state and `999` quantity display update live when enabling or disabling the override
+
+## 1.0.1
+
 - Initial project setup
 - Added a professions crafting unlock checkbox
 - Added a live reagent-count override toggle with no reload required
