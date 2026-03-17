@@ -1,5 +1,3 @@
-local ADDON_NAME = ...
-
 local frame = CreateFrame("Frame")
 local REAGENT_COUNT_OVERRIDE = 999
 local CHECKBOX_TOP_OFFSET = -6
@@ -7,11 +5,6 @@ local CHECKBOX_SIZE = 24
 local LABEL_OFFSET_X = 0
 local LABEL_TEXT = (GetLocale() == "zhCN" or GetLocale() == "zhTW") and "解锁" or "Unlock"
 
-local defaults = {
-    enabled = false,
-}
-
-local db
 local originalGetCraftingReagentCount
 local originalGetCurrencyInfo
 local originalGetReagentSlotStatus
@@ -22,27 +15,7 @@ local originalCreateProfessionsOrderMCRFlyout
 local unlockCheckbox
 local unlockLabel
 local isElvUISkinned = false
-
-local function CopyDefaults(target, source)
-    for key, value in pairs(source) do
-        if type(value) == "table" then
-            target[key] = target[key] or {}
-            CopyDefaults(target[key], value)
-        elseif target[key] == nil then
-            target[key] = value
-        end
-    end
-end
-
-local function GetDB()
-    if not db then
-        SimpleCraftSimDB = SimpleCraftSimDB or {}
-        CopyDefaults(SimpleCraftSimDB, defaults)
-        db = SimpleCraftSimDB
-    end
-
-    return db
-end
+local isUnlockEnabled = false
 
 local function GetCraftingPage()
     local professionsFrame = _G.ProfessionsFrame
@@ -91,12 +64,32 @@ local function WrapMCRFlyoutBehavior(behavior)
     end
 
     behavior.SimpleCraftSimWrapped = true
+    behavior.SimpleCraftSimOriginalIsElementValid = behavior.IsElementValid
+    behavior.SimpleCraftSimOriginalIsElementEnabled = behavior.IsElementEnabled
 
-    behavior.IsElementValid = function()
+    behavior.IsElementValid = function(self, ...)
+        if not isUnlockEnabled then
+            local originalMethod = self.SimpleCraftSimOriginalIsElementValid
+            if originalMethod then
+                return originalMethod(self, ...)
+            end
+
+            return true
+        end
+
         return true
     end
 
     behavior.IsElementEnabled = function(self, elementData, count)
+        if not isUnlockEnabled then
+            local originalMethod = self.SimpleCraftSimOriginalIsElementEnabled
+            if originalMethod then
+                return originalMethod(self, elementData, count)
+            end
+
+            return false
+        end
+
         if not elementData or not elementData.reagent then
             return false
         end
@@ -113,7 +106,6 @@ local function WrapMCRFlyoutBehavior(behavior)
 end
 
 local function ApplyOverride()
-    local currentDB = GetDB()
     local itemUtil = _G.ItemUtil
     if type(itemUtil) == "table" and type(itemUtil.GetCraftingReagentCount) == "function" and not originalGetCraftingReagentCount then
         originalGetCraftingReagentCount = itemUtil.GetCraftingReagentCount
@@ -145,15 +137,15 @@ local function ApplyOverride()
         originalCreateProfessionsOrderMCRFlyout = _G.CreateProfessionsOrderMCRFlyout
     end
 
-    if currentDB.enabled and originalGetCraftingReagentCount then
+    if isUnlockEnabled and originalGetCraftingReagentCount and itemUtil then
         itemUtil.GetCraftingReagentCount = function()
             return REAGENT_COUNT_OVERRIDE
         end
-    elseif originalGetCraftingReagentCount then
+    elseif originalGetCraftingReagentCount and itemUtil then
         itemUtil.GetCraftingReagentCount = originalGetCraftingReagentCount
     end
 
-    if currentDB.enabled and originalGetCurrencyInfo and currencyInfoAPI then
+    if isUnlockEnabled and originalGetCurrencyInfo and currencyInfoAPI then
         currencyInfoAPI.GetCurrencyInfo = function(currencyID)
             local info = originalGetCurrencyInfo(currencyID)
             if type(info) ~= "table" then
@@ -168,7 +160,7 @@ local function ApplyOverride()
         currencyInfoAPI.GetCurrencyInfo = originalGetCurrencyInfo
     end
 
-    if currentDB.enabled and originalGetReagentSlotStatus and professions then
+    if isUnlockEnabled and originalGetReagentSlotStatus and professions then
         professions.GetReagentSlotStatus = function()
             return false, nil
         end
@@ -176,7 +168,7 @@ local function ApplyOverride()
         professions.GetReagentSlotStatus = originalGetReagentSlotStatus
     end
 
-    if currentDB.enabled and originalGenerateItemsFromEligibleItemSlots and professions then
+    if isUnlockEnabled and originalGenerateItemsFromEligibleItemSlots and professions then
         professions.GenerateItemsFromEligibleItemSlots = function(reagents, filterAvailable)
             if type(reagents) ~= "table" then
                 return originalGenerateItemsFromEligibleItemSlots(reagents, filterAvailable)
@@ -198,7 +190,7 @@ local function ApplyOverride()
         professions.GenerateItemsFromEligibleItemSlots = originalGenerateItemsFromEligibleItemSlots
     end
 
-    if currentDB.enabled and originalAreDependentReagentsAllocated and transactionMixin then
+    if isUnlockEnabled and originalAreDependentReagentsAllocated and transactionMixin then
         transactionMixin.AreDependentReagentsAllocated = function()
             return true
         end
@@ -206,7 +198,7 @@ local function ApplyOverride()
         transactionMixin.AreDependentReagentsAllocated = originalAreDependentReagentsAllocated
     end
 
-    if currentDB.enabled and originalCreateProfessionsMCRFlyout then
+    if isUnlockEnabled and originalCreateProfessionsMCRFlyout then
         _G.CreateProfessionsMCRFlyout = function(...)
             return WrapMCRFlyoutBehavior(originalCreateProfessionsMCRFlyout(...))
         end
@@ -214,12 +206,35 @@ local function ApplyOverride()
         _G.CreateProfessionsMCRFlyout = originalCreateProfessionsMCRFlyout
     end
 
-    if currentDB.enabled and originalCreateProfessionsOrderMCRFlyout then
+    if isUnlockEnabled and originalCreateProfessionsOrderMCRFlyout then
         _G.CreateProfessionsOrderMCRFlyout = function(...)
             return WrapMCRFlyoutBehavior(originalCreateProfessionsOrderMCRFlyout(...))
         end
     elseif originalCreateProfessionsOrderMCRFlyout then
         _G.CreateProfessionsOrderMCRFlyout = originalCreateProfessionsOrderMCRFlyout
+    end
+end
+
+local function SetUnlockEnabled(enabled, shouldRefresh)
+    local normalizedEnabled = not not enabled
+    if isUnlockEnabled == normalizedEnabled then
+        if unlockCheckbox then
+            unlockCheckbox:SetChecked(normalizedEnabled)
+        end
+        return
+    end
+
+    isUnlockEnabled = normalizedEnabled
+    ApplyOverride()
+
+    if unlockCheckbox then
+        unlockCheckbox:SetChecked(normalizedEnabled)
+    end
+
+    if shouldRefresh then
+        RefreshCraftingForm()
+        C_Timer.After(0, RefreshCraftingForm)
+        C_Timer.After(0.05, RefreshCraftingForm)
     end
 end
 
@@ -230,7 +245,7 @@ end
 
 local function UpdateControlState()
     if unlockCheckbox then
-        unlockCheckbox:SetChecked(GetDB().enabled)
+        unlockCheckbox:SetChecked(isUnlockEnabled)
     end
 end
 
@@ -279,12 +294,7 @@ local function CreateControls(parent)
     end
 
     unlockCheckbox:SetScript("OnClick", function(self)
-        local currentDB = GetDB()
-        currentDB.enabled = not not self:GetChecked()
-        ApplyOverride()
-        RefreshCraftingForm()
-        C_Timer.After(0, RefreshCraftingForm)
-        C_Timer.After(0.05, RefreshCraftingForm)
+        SetUnlockEnabled(self:GetChecked(), true)
     end)
 
     ApplyElvUISkin()
@@ -322,6 +332,9 @@ local function HookProfessionsFrame()
 
     if schematicForm.HookScript then
         schematicForm:HookScript("OnShow", EnsureControls)
+        schematicForm:HookScript("OnHide", function()
+            SetUnlockEnabled(false, false)
+        end)
     end
 
     if schematicForm.Init then
@@ -338,9 +351,7 @@ frame:RegisterEvent("ADDON_LOADED")
 frame:RegisterEvent("PLAYER_LOGIN")
 frame:SetScript("OnEvent", function(_, event, arg1)
     if event == "ADDON_LOADED" then
-        if arg1 == ADDON_NAME then
-            GetDB()
-        elseif arg1 == "Blizzard_Professions" or arg1 == "Blizzard_ProfessionsTemplates" then
+        if arg1 == "Blizzard_Professions" or arg1 == "Blizzard_ProfessionsTemplates" then
             ApplyOverride()
             C_Timer.After(0, HookProfessionsFrame)
         elseif arg1 == "ElvUI" then

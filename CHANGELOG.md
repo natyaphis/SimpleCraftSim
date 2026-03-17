@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+## 1.0.9
+
+- Limited unlock mode to the currently open professions crafting page instead of leaking into other pages
+- Restored original modified reagent flyout behavior immediately when unlock is turned off
+- Automatically clears the unlock checkbox when the current crafting page closes or hides
+
+## 1.0.8
+
+- Changed unlock mode to apply only to the currently open crafting page instead of persisting into other professions pages
+- Automatically clears the unlock checkbox when the current crafting page closes or hides
+
 ## 1.0.7
 
 - Fixed unlock mode for recipes that require four sparks by overriding the modified reagent flyout enable check instead of only changing the displayed quantity
