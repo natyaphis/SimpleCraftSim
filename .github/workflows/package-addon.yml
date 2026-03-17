@@ -15,7 +15,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Prepare package folder (exclude dev files)
+      - name: Prepare package folder
         run: |
           set -euo pipefail
           rm -rf package
@@ -25,10 +25,14 @@ jobs:
             --exclude ".git/" \
             --exclude ".github/" \
             --exclude ".vscode/" \
-            --exclude "Asset/" \
+            --exclude ".idea/" \
             --exclude ".gitignore" \
             --exclude ".gitattributes" \
             --exclude "package/" \
+            --exclude "CHANGELOG.md" \
+            --exclude "AGENTS.md" \
+            --exclude "scripts/" \
+            --exclude "Asset/" \
             ./ package/SimpleCraftSim/
 
           echo "Package content:"
