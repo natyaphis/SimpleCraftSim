@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.1.2
+
+- Maintenance update.
+
 ## 1.1.1
 
 - Maintenance update.
@@ -11,6 +15,10 @@ All notable changes to this project will be documented in this file.
 - Maintenance update.
 
 ## Unreleased
+
+- Reworked unlock mode to use a lighter implementation centered on reagent quantity helpers and flyout button state updates.
+- Removed the previous unlock overrides for slot status, currency info, transaction dependency checks, and profession flyout constructor functions.
+- Clear invalid visible reagent allocations when unlock mode is turned off so the form returns to legal owned-material state.
 
 ## 1.0.9
 

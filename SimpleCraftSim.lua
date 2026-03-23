@@ -6,16 +6,15 @@ local LABEL_OFFSET_X = 0
 local LABEL_TEXT = (GetLocale() == "zhCN" or GetLocale() == "zhTW") and "解锁" or "Unlock"
 
 local originalGetCraftingReagentCount
-local originalGetCurrencyInfo
-local originalGetReagentSlotStatus
-local originalGenerateItemsFromEligibleItemSlots
-local originalAreDependentReagentsAllocated
-local originalCreateProfessionsMCRFlyout
-local originalCreateProfessionsOrderMCRFlyout
+local originalGetReagentQuantityInPossession
+local originalAccumulateReagentsInPossession
+local originalFlyoutItemButtonUpdateState
+local originalFlyoutCurrencyButtonUpdateState
 local unlockCheckbox
 local unlockLabel
 local isElvUISkinned = false
 local isUnlockEnabled = false
+local flyoutButtonOverridesInstalled = false
 
 local function GetCraftingPage()
     local professionsFrame = _G.ProfessionsFrame
@@ -49,174 +48,206 @@ local function RefreshCraftingForm()
     SafeCallMethod(schematicForm, "UpdateDetailsStats")
     SafeCallMethod(schematicForm, "UpdateCreateButton")
     SafeCallMethod(schematicForm, "Layout")
-
-    local event = _G.ProfessionsRecipeSchematicFormMixin
-        and _G.ProfessionsRecipeSchematicFormMixin.Event
-        and _G.ProfessionsRecipeSchematicFormMixin.Event.AllocationsModified
-    if event then
-        SafeCallMethod(schematicForm, "TriggerEvent", event)
-    end
 end
 
-local function WrapMCRFlyoutBehavior(behavior)
-    if not behavior or behavior.SimpleCraftSimWrapped then
-        return behavior
-    end
-
-    behavior.SimpleCraftSimWrapped = true
-    behavior.SimpleCraftSimOriginalIsElementValid = behavior.IsElementValid
-    behavior.SimpleCraftSimOriginalIsElementEnabled = behavior.IsElementEnabled
-
-    behavior.IsElementValid = function(self, ...)
-        if not isUnlockEnabled then
-            local originalMethod = self.SimpleCraftSimOriginalIsElementValid
-            if originalMethod then
-                return originalMethod(self, ...)
-            end
-
-            return true
-        end
-
-        return true
-    end
-
-    behavior.IsElementEnabled = function(self, elementData, count)
-        if not isUnlockEnabled then
-            local originalMethod = self.SimpleCraftSimOriginalIsElementEnabled
-            if originalMethod then
-                return originalMethod(self, elementData, count)
-            end
-
-            return false
-        end
-
-        if not elementData or not elementData.reagent then
-            return false
-        end
-
-        local transaction = self.GetTransaction and self:GetTransaction() or nil
-        if transaction and transaction.HasAllocatedReagent and transaction:HasAllocatedReagent(elementData.reagent) then
-            return false
-        end
-
-        return (tonumber(count) or 0) > 0
-    end
-
-    return behavior
+local function GetCraftingReagentCountOverride()
+    return REAGENT_COUNT_OVERRIDE
 end
 
-local function ApplyOverride()
+local function GetReagentQuantityInPossessionOverride()
+    return REAGENT_COUNT_OVERRIDE
+end
+
+local function AccumulateReagentsInPossessionOverride()
+    return REAGENT_COUNT_OVERRIDE
+end
+
+local function SetUnlockHooksEnabled(enabled)
     local itemUtil = _G.ItemUtil
     if type(itemUtil) == "table" and type(itemUtil.GetCraftingReagentCount) == "function" and not originalGetCraftingReagentCount then
         originalGetCraftingReagentCount = itemUtil.GetCraftingReagentCount
     end
 
-    local currencyInfoAPI = _G.C_CurrencyInfo
-    if type(currencyInfoAPI) == "table" and type(currencyInfoAPI.GetCurrencyInfo) == "function" and not originalGetCurrencyInfo then
-        originalGetCurrencyInfo = currencyInfoAPI.GetCurrencyInfo
+    local professionsUtil = _G.ProfessionsUtil
+    if type(professionsUtil) == "table" and type(professionsUtil.GetReagentQuantityInPossession) == "function" and not originalGetReagentQuantityInPossession then
+        originalGetReagentQuantityInPossession = professionsUtil.GetReagentQuantityInPossession
+    end
+    if type(professionsUtil) == "table" and type(professionsUtil.AccumulateReagentsInPossession) == "function" and not originalAccumulateReagentsInPossession then
+        originalAccumulateReagentsInPossession = professionsUtil.AccumulateReagentsInPossession
     end
 
-    local professions = _G.Professions
-    if type(professions) == "table" and type(professions.GetReagentSlotStatus) == "function" and not originalGetReagentSlotStatus then
-        originalGetReagentSlotStatus = professions.GetReagentSlotStatus
+    if type(itemUtil) == "table" and originalGetCraftingReagentCount then
+        itemUtil.GetCraftingReagentCount = enabled and GetCraftingReagentCountOverride or originalGetCraftingReagentCount
     end
-    if type(professions) == "table" and type(professions.GenerateItemsFromEligibleItemSlots) == "function" and not originalGenerateItemsFromEligibleItemSlots then
-        originalGenerateItemsFromEligibleItemSlots = professions.GenerateItemsFromEligibleItemSlots
+    if type(professionsUtil) == "table" and originalGetReagentQuantityInPossession then
+        professionsUtil.GetReagentQuantityInPossession = enabled and GetReagentQuantityInPossessionOverride or originalGetReagentQuantityInPossession
+    end
+    if type(professionsUtil) == "table" and originalAccumulateReagentsInPossession then
+        professionsUtil.AccumulateReagentsInPossession = enabled and AccumulateReagentsInPossessionOverride or originalAccumulateReagentsInPossession
+    end
+end
+
+local function IsFlyoutElementUnlocked(elementData, behavior)
+    if not isUnlockEnabled or not elementData or not behavior then
+        return false
     end
 
-    local transactionMixin = _G.ProfessionsRecipeTransactionMixin
-    if type(transactionMixin) == "table" and type(transactionMixin.AreDependentReagentsAllocated) == "function" and not originalAreDependentReagentsAllocated then
-        originalAreDependentReagentsAllocated = transactionMixin.AreDependentReagentsAllocated
+    local reagent = elementData.reagent
+    local transaction = behavior.GetTransaction and behavior:GetTransaction() or nil
+    if not reagent or not transaction then
+        return false
     end
 
-    if type(_G.CreateProfessionsMCRFlyout) == "function" and not originalCreateProfessionsMCRFlyout then
-        originalCreateProfessionsMCRFlyout = _G.CreateProfessionsMCRFlyout
+    if transaction.HasAllocatedReagent and transaction:HasAllocatedReagent(reagent) then
+        return false
+    end
+    if transaction.AreDependentReagentsAllocated and not transaction:AreDependentReagentsAllocated(reagent) then
+        return false
     end
 
-    if type(_G.CreateProfessionsOrderMCRFlyout) == "function" and not originalCreateProfessionsOrderMCRFlyout then
-        originalCreateProfessionsOrderMCRFlyout = _G.CreateProfessionsOrderMCRFlyout
+    local recraftAllocation = transaction.GetRecraftAllocation and transaction:GetRecraftAllocation() or nil
+    if recraftAllocation and C_TradeSkillUI and C_TradeSkillUI.IsRecraftReagentValid and not C_TradeSkillUI.IsRecraftReagentValid(recraftAllocation, reagent) then
+        return false
     end
 
-    if isUnlockEnabled and originalGetCraftingReagentCount and itemUtil then
-        itemUtil.GetCraftingReagentCount = function()
-            return REAGENT_COUNT_OVERRIDE
+    return true
+end
+
+local function UpdateFlyoutButtonState(button, count, elementData, behavior)
+    local valid = behavior and behavior.IsElementValid and behavior:IsElementValid(elementData)
+    if not valid then
+        return
+    end
+
+    if IsFlyoutElementUnlocked(elementData, behavior) then
+        button.enabled = true
+        if button.DesaturateHierarchy then
+            button:DesaturateHierarchy(0)
         end
-    elseif originalGetCraftingReagentCount and itemUtil then
-        itemUtil.GetCraftingReagentCount = originalGetCraftingReagentCount
-    end
-
-    if isUnlockEnabled and originalGetCurrencyInfo and currencyInfoAPI then
-        currencyInfoAPI.GetCurrencyInfo = function(currencyID)
-            local info = originalGetCurrencyInfo(currencyID)
-            if type(info) ~= "table" then
-                return info
-            end
-
-            local overriddenInfo = CopyTable(info)
-            overriddenInfo.quantity = math.max(tonumber(info.quantity) or 0, REAGENT_COUNT_OVERRIDE)
-            return overriddenInfo
+        if button.GetNormalTexture and button:GetNormalTexture() then
+            SetItemButtonTextureVertexColor(button, 1, 1, 1)
+            SetItemButtonNormalTextureVertexColor(button, 1, 1, 1)
         end
-    elseif originalGetCurrencyInfo and currencyInfoAPI then
-        currencyInfoAPI.GetCurrencyInfo = originalGetCurrencyInfo
+    end
+end
+
+local function EnsureFlyoutButtonOverrides()
+    if flyoutButtonOverridesInstalled then
+        return
     end
 
-    if isUnlockEnabled and originalGetReagentSlotStatus and professions then
-        professions.GetReagentSlotStatus = function()
-            return false, nil
+    if ProfessionsFlyoutItemButtonMixin and type(ProfessionsFlyoutItemButtonMixin.UpdateState) == "function" then
+        originalFlyoutItemButtonUpdateState = ProfessionsFlyoutItemButtonMixin.UpdateState
+        ProfessionsFlyoutItemButtonMixin.UpdateState = function(button, count, elementData, behavior)
+            originalFlyoutItemButtonUpdateState(button, count, elementData, behavior)
+            UpdateFlyoutButtonState(button, count, elementData, behavior)
         end
-    elseif originalGetReagentSlotStatus and professions then
-        professions.GetReagentSlotStatus = originalGetReagentSlotStatus
     end
 
-    if isUnlockEnabled and originalGenerateItemsFromEligibleItemSlots and professions then
-        professions.GenerateItemsFromEligibleItemSlots = function(reagents, filterAvailable)
-            if type(reagents) ~= "table" then
-                return originalGenerateItemsFromEligibleItemSlots(reagents, filterAvailable)
-            end
+    if ProfessionsFlyoutCurrencyButtonMixin and type(ProfessionsFlyoutCurrencyButtonMixin.UpdateState) == "function" then
+        originalFlyoutCurrencyButtonUpdateState = ProfessionsFlyoutCurrencyButtonMixin.UpdateState
+        ProfessionsFlyoutCurrencyButtonMixin.UpdateState = function(button, count, elementData, behavior)
+            originalFlyoutCurrencyButtonUpdateState(button, count, elementData, behavior)
+            UpdateFlyoutButtonState(button, count, elementData, behavior)
+        end
+    end
 
-            local items = {}
-            local seenItemIDs = {}
-            for _, reagent in ipairs(reagents) do
-                local itemID = reagent and reagent.itemID
-                if itemID and not seenItemIDs[itemID] then
-                    table.insert(items, Item:CreateFromItemID(itemID))
-                    seenItemIDs[itemID] = true
+    flyoutButtonOverridesInstalled = true
+end
+
+local function SanitizeTransaction(transaction)
+    if not transaction then
+        return false
+    end
+
+    local changed = false
+    local beforeCount
+
+    if transaction.CreateCraftingReagentInfoTbl then
+        local ok, tbl = pcall(transaction.CreateCraftingReagentInfoTbl, transaction)
+        if ok and tbl then
+            beforeCount = #tbl
+        end
+    end
+
+    SafeCallMethod(transaction, "SanitizeOptionalAllocations")
+    SafeCallMethod(transaction, "SanitizeAllocations")
+    SafeCallMethod(transaction, "SanitizeTargetAllocations")
+
+    local recipeSchematic = transaction.GetRecipeSchematic and transaction:GetRecipeSchematic() or nil
+    if recipeSchematic and transaction.HasAnyAllocations and transaction.ClearAllocations and transaction.EnumerateAllocations and originalGetReagentQuantityInPossession then
+        local useCharacterInventoryOnly = transaction.ShouldUseCharacterInventoryOnly and transaction:ShouldUseCharacterInventoryOnly() or false
+
+        for slotIndex, reagentSlotSchematic in ipairs(recipeSchematic.reagentSlotSchematics or {}) do
+            if transaction:HasAnyAllocations(slotIndex) then
+                local requiredQuantity = reagentSlotSchematic.quantityRequired or 0
+                local allocatedOwnedQuantity = 0
+                local invalidSlot = false
+
+                for _, allocation in transaction:EnumerateAllocations(slotIndex) do
+                    local reagent = allocation and allocation.reagent
+                    if not reagent then
+                        invalidSlot = true
+                        break
+                    end
+
+                    local ownedQuantity = originalGetReagentQuantityInPossession(reagent, useCharacterInventoryOnly) or 0
+                    local reagentRequiredQuantity = reagentSlotSchematic.GetQuantityRequired and reagentSlotSchematic:GetQuantityRequired(reagent) or requiredQuantity
+                    if ownedQuantity < reagentRequiredQuantity then
+                        invalidSlot = true
+                        break
+                    end
+
+                    allocatedOwnedQuantity = allocatedOwnedQuantity + ownedQuantity
+                end
+
+                if not invalidSlot and requiredQuantity > 0 and allocatedOwnedQuantity < requiredQuantity then
+                    invalidSlot = true
+                end
+
+                if invalidSlot then
+                    pcall(transaction.ClearAllocations, transaction, slotIndex)
+                    changed = true
                 end
             end
-
-            return items
         end
-    elseif originalGenerateItemsFromEligibleItemSlots and professions then
-        professions.GenerateItemsFromEligibleItemSlots = originalGenerateItemsFromEligibleItemSlots
     end
 
-    if isUnlockEnabled and originalAreDependentReagentsAllocated and transactionMixin then
-        transactionMixin.AreDependentReagentsAllocated = function()
-            return true
+    if beforeCount and transaction.CreateCraftingReagentInfoTbl then
+        local ok, tbl = pcall(transaction.CreateCraftingReagentInfoTbl, transaction)
+        if ok and tbl then
+            changed = changed or beforeCount ~= #tbl
         end
-    elseif originalAreDependentReagentsAllocated and transactionMixin then
-        transactionMixin.AreDependentReagentsAllocated = originalAreDependentReagentsAllocated
     end
 
-    if isUnlockEnabled and originalCreateProfessionsMCRFlyout then
-        _G.CreateProfessionsMCRFlyout = function(...)
-            return WrapMCRFlyoutBehavior(originalCreateProfessionsMCRFlyout(...))
-        end
-    elseif originalCreateProfessionsMCRFlyout then
-        _G.CreateProfessionsMCRFlyout = originalCreateProfessionsMCRFlyout
+    return changed
+end
+
+local function SanitizeVisibleReagentAllocations()
+    local schematicForm = GetSchematicForm()
+    if not schematicForm or not schematicForm:IsVisible() then
+        return
     end
 
-    if isUnlockEnabled and originalCreateProfessionsOrderMCRFlyout then
-        _G.CreateProfessionsOrderMCRFlyout = function(...)
-            return WrapMCRFlyoutBehavior(originalCreateProfessionsOrderMCRFlyout(...))
+    local transaction = schematicForm.GetTransaction and schematicForm:GetTransaction() or nil
+    SanitizeTransaction(transaction)
+
+    if schematicForm.QualityDialog and schematicForm.QualityDialog.IsShown and schematicForm.QualityDialog:IsShown() then
+        local qd = schematicForm.QualityDialog
+        local slotIndex = qd.GetSlotIndex and qd:GetSlotIndex() or nil
+        if slotIndex and transaction and transaction.GetAllocationsCopy and qd.ReinitAllocations then
+            local allocationsCopy = transaction:GetAllocationsCopy(slotIndex)
+            qd:ReinitAllocations(allocationsCopy)
         end
-    elseif originalCreateProfessionsOrderMCRFlyout then
-        _G.CreateProfessionsOrderMCRFlyout = originalCreateProfessionsOrderMCRFlyout
     end
+
+    RefreshCraftingForm()
 end
 
 local function SetUnlockEnabled(enabled, shouldRefresh)
     local normalizedEnabled = not not enabled
+    local wasEnabled = isUnlockEnabled
+
     if isUnlockEnabled == normalizedEnabled then
         if unlockCheckbox then
             unlockCheckbox:SetChecked(normalizedEnabled)
@@ -225,13 +256,15 @@ local function SetUnlockEnabled(enabled, shouldRefresh)
     end
 
     isUnlockEnabled = normalizedEnabled
-    ApplyOverride()
+    SetUnlockHooksEnabled(normalizedEnabled)
 
     if unlockCheckbox then
         unlockCheckbox:SetChecked(normalizedEnabled)
     end
 
-    if shouldRefresh then
+    if wasEnabled and not normalizedEnabled then
+        SanitizeVisibleReagentAllocations()
+    elseif shouldRefresh then
         RefreshCraftingForm()
         C_Timer.After(0, RefreshCraftingForm)
         C_Timer.After(0.05, RefreshCraftingForm)
@@ -277,7 +310,7 @@ local function CreateControls(parent)
         return
     end
 
-    unlockCheckbox = CreateFrame("CheckButton", "SimpleCraftSimUnlockCheckbox", parent, "UICheckButtonTemplate")
+    unlockCheckbox = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
     unlockCheckbox:SetSize(CHECKBOX_SIZE, CHECKBOX_SIZE)
     unlockCheckbox:SetHitRectInsets(0, 0, 0, 0)
 
@@ -352,14 +385,14 @@ frame:RegisterEvent("PLAYER_LOGIN")
 frame:SetScript("OnEvent", function(_, event, arg1)
     if event == "ADDON_LOADED" then
         if arg1 == "Blizzard_Professions" or arg1 == "Blizzard_ProfessionsTemplates" then
-            ApplyOverride()
+            EnsureFlyoutButtonOverrides()
             C_Timer.After(0, HookProfessionsFrame)
         elseif arg1 == "ElvUI" then
             isElvUISkinned = false
             C_Timer.After(0, EnsureControls)
         end
     elseif event == "PLAYER_LOGIN" then
-        ApplyOverride()
+        EnsureFlyoutButtonOverrides()
         C_Timer.After(0, HookProfessionsFrame)
     end
 end)
