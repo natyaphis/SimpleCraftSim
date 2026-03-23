@@ -1,0 +1,46 @@
+2x [ADDON_ACTION_BLOCKED] 插件 'SimpleCraftSim' 尝试调用保护功能 'Frame:SetPropagateMouseClicks()'。
+[!BugGrabber/BugGrabber.lua]:532: in function '?'
+[!BugGrabber/BugGrabber.lua]:516: in function <!BugGrabber/BugGrabber.lua:516>
+[C]: in function 'SetPropagateMouseClicks'
+[Blizzard_SharedMapDataProviders/SharedMapPoiTemplates.lua]:515: in function 'UpdateMousePropagation'
+[Blizzard_SharedMapDataProviders/SharedMapPoiTemplates.lua]:520: in function 'OnAcquired'
+[Blizzard_SharedMapDataProviders/SharedMapPoiTemplates.lua]:632: in function 'OnAcquired'
+[Blizzard_SharedMapDataProviders/FlightPointDataProvider.lua]:62: in function 'OnAcquired'
+[Blizzard_MapCanvas/Blizzard_MapCanvas.lua]:297: in function 'AcquirePin'
+[Blizzard_SharedMapDataProviders/FlightPointDataProvider.lua]:29: in function 'RefreshAllData'
+[Blizzard_MapCanvas/Blizzard_MapCanvas.lua]:636: in function <...aceBlizzard_MapCanvas/Blizzard_MapCanvas.lua:635>
+[C]: in function 'secureexecuterange'
+[Blizzard_MapCanvas/Blizzard_MapCanvas.lua]:640: in function 'RefreshAllDataProviders'
+...[C]: in function 'Show'
+[Blizzard_UIParentPanelManager/Shared/UIParentPanelManager.lua]:461: in function 'SetUIPanel'
+[Blizzard_UIParentPanelManager/Shared/UIParentPanelManager.lua]:304: in function 'ShowUIPanel'
+[Blizzard_UIParentPanelManager/Shared/UIParentPanelManager.lua]:133: in function <...UIParentPanelManager/Shared/UIParentPanelManager.lua:128>
+[C]: in function 'SetAttribute'
+[Blizzard_UIParentPanelManager/Shared/UIParentPanelManager.lua]:850: in function 'ShowUIPanel'
+[Blizzard_WorldMap/QuestLogOwnerMixin.lua]:115: in function 'SetDisplayState'
+[Blizzard_WorldMap/QuestLogOwnerMixin.lua]:51: in function 'HandleUserActionToggleSelf'
+[Blizzard_WorldMap/Blizzard_WorldMap.lua]:567: in function 'ToggleWorldMap'
+[TOGGLEWORLDMAP]:1: in function <[string "TOGGLEWORLDMAP"]:1>
+
+
+Locals:
+self = <table> {
+}
+event = "ADDON_ACTION_BLOCKED"
+addonName = "SimpleCraftSim"
+addonFunc = "Frame:SetPropagateMouseClicks()"
+name = "SimpleCraftSim"
+badAddons = <table> {
+ SimpleCraftSim = true
+}
+L = <table> {
+ NO_DISPLAY_2 = "|cffffff00标准的错误显示插件名叫 BugSack，可以在找到 !BugGrabber 的网站上找到它。|r"
+ ERROR_DETECTED = "%s |cffffff00已抓取，点击链接获取更多信息。|r"
+ BUGGRABBER_STOPPED = "|cffffff00用户界面有太多的错误。所以，游戏体验会被降低。如不想再看到此信息请禁用或升级失效插件。|r"
+ USAGE = "|cffffff00用法：/buggrabber <1-%d>。|r"
+ STOP_NAG = "|cffffff00!BugGrabber 将不再提示缺失错误显示插件信息知道下个版本发布。|r"
+ NO_DISPLAY_STOP = "|cffffff00如果你不希望再次被提醒，请输入 /stopnag。|r"
+ NO_DISPLAY_1 = "|cffffff00似乎没有与 !BugGrabber 一起运行的错误显示插件。虽然斜线命令访问错误报告，但错误显示插件可以以更快捷的方式帮助您管理这些错误。|r"
+ ERROR_UNABLE = "|cffffff00!BugGrabber 本身无法检索其他玩家的错误。请安装 BugSack 或类似的错误显示插件，可能会包含这些功能。|r"
+ ADDON_CALL_PROTECTED = "[%s] 插件 '%s' 尝试调用保护功能 '%s'。"
+}

@@ -1,7 +1,21 @@
+# OS files
 .DS_Store
 Thumbs.db
+
+# Editor settings
 .idea/
 .vscode/
-package/
-scripts/
-AGENTS.md
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Node
+node_modules/
+
+# Build output
+dist/
+build/
+coverage/
