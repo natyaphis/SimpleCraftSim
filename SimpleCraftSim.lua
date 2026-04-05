@@ -3,6 +3,13 @@ local CHECKBOX_TOP_OFFSET = -6
 local CHECKBOX_SIZE = 24
 local LABEL_OFFSET_X = 0
 local LABEL_TEXT = (GetLocale() == "zhCN" or GetLocale() == "zhTW") and "解锁" or "Unlock"
+local BAG_UPDATE_EVENTS = {
+    "BAG_UPDATE",
+    "BAG_UPDATE_DELAYED",
+    "BANKFRAME_OPENED",
+    "BANKFRAME_CLOSED",
+    "PLAYERBANKSLOTS_CHANGED",
+}
 
 local unlockCheckbox
 local unlockLabel
@@ -38,6 +45,13 @@ local function RefreshCraftingForm()
         return
     end
 
+    if schematicForm.QualityDialog and schematicForm.QualityDialog.IsShown and schematicForm.QualityDialog:IsShown() then
+        local qd = schematicForm.QualityDialog
+        if qd.recipeID and qd.Setup then
+            pcall(qd.Setup, qd)
+        end
+    end
+
     SafeCallMethod(schematicForm, "UpdateAllSlots")
     SafeCallMethod(schematicForm, "OnAllocationsChanged")
     SafeCallMethod(schematicForm, "UpdateReagentSlots")
@@ -47,6 +61,11 @@ local function RefreshCraftingForm()
     SafeCallMethod(schematicForm, "UpdateDetailsStats")
     SafeCallMethod(schematicForm, "UpdateCreateButton")
     SafeCallMethod(schematicForm, "Layout")
+
+    local craftingPage = GetCraftingPage()
+    if craftingPage and craftingPage.OnEvent then
+        pcall(craftingPage.OnEvent, craftingPage, "BAG_UPDATE")
+    end
 end
 
 local function GetCraftingReagentCountOverride()
@@ -319,6 +338,29 @@ local function RefreshVisibleFlyouts()
     end
 end
 
+local function SetCraftingPageBagUpdatesSuspended(suspended)
+    local craftingPage = GetCraftingPage()
+    if not craftingPage or type(craftingPage.IsEventRegistered) ~= "function" then
+        return
+    end
+
+    craftingPage.simpleCraftSimSuspendedBagEvents = craftingPage.simpleCraftSimSuspendedBagEvents or {}
+
+    for _, eventName in ipairs(BAG_UPDATE_EVENTS) do
+        if suspended then
+            if craftingPage:IsEventRegistered(eventName) then
+                craftingPage.simpleCraftSimSuspendedBagEvents[eventName] = true
+                pcall(craftingPage.UnregisterEvent, craftingPage, eventName)
+            end
+        elseif craftingPage.simpleCraftSimSuspendedBagEvents[eventName] then
+            craftingPage.simpleCraftSimSuspendedBagEvents[eventName] = nil
+            if type(craftingPage.RegisterEvent) == "function" and not craftingPage:IsEventRegistered(eventName) then
+                pcall(craftingPage.RegisterEvent, craftingPage, eventName)
+            end
+        end
+    end
+end
+
 local function SetUnlockEnabled(enabled, shouldRefresh)
     local normalizedEnabled = not not enabled
     local wasEnabled = isUnlockEnabled
@@ -332,6 +374,7 @@ local function SetUnlockEnabled(enabled, shouldRefresh)
 
     isUnlockEnabled = normalizedEnabled
     SetUnlockCountOverridesEnabled(normalizedEnabled)
+    SetCraftingPageBagUpdatesSuspended(normalizedEnabled)
 
     if unlockCheckbox then
         unlockCheckbox:SetChecked(normalizedEnabled)
@@ -444,7 +487,6 @@ local function HookProfessionsFrame()
     if schematicForm.HookScript then
         schematicForm:HookScript("OnShow", EnsureControls)
         schematicForm:HookScript("OnHide", function()
-            SetUnlockCountOverridesEnabled(false)
             SetUnlockEnabled(false, false)
         end)
     end

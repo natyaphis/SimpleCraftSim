@@ -2,11 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.1.4
+
+- Maintenance update.
+
 ## 1.1.3
 
 - Maintenance update.
 
-## 1.1.2
+## 1.1.2 (Current CurseForge release)
 
 - Maintenance update.
 
