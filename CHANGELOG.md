@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## 1.1.5
+
+- Reworked unlock mode to use a lighter implementation centered on reagent quantity helpers and flyout button state updates.
+- Removed the previous unlock overrides for slot status, currency info, transaction dependency checks, and profession flyout constructor functions.
+- Clear invalid visible reagent allocations when unlock mode is turned off so the form returns to legal owned-material state.
+- Moved flyout unlocking to `ProfessionsFlyout*ButtonMixin.UpdateState` so spark and crest entries follow the live Blizzard button pipeline in current clients.
+- Stopped writing addon fields onto Blizzard flyout buttons and removed direct `SetEnabled()` calls to reduce taint risk and avoid unrelated protected-action errors.
+
 ## 1.1.4
 
 - Maintenance update.
@@ -21,12 +29,6 @@ All notable changes to this project will be documented in this file.
 ## 1.1.0
 
 - Maintenance update.
-
-## Unreleased
-
-- Reworked unlock mode to use a lighter implementation centered on reagent quantity helpers and flyout button state updates.
-- Removed the previous unlock overrides for slot status, currency info, transaction dependency checks, and profession flyout constructor functions.
-- Clear invalid visible reagent allocations when unlock mode is turned off so the form returns to legal owned-material state.
 
 ## 1.0.9
 

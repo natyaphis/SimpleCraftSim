@@ -18,9 +18,10 @@ local isUnlockEnabled = false
 local originalGetCraftingReagentCount
 local originalGetReagentQuantityInPossession
 local originalAccumulateReagentsInPossession
-local flyoutHooksInstalled = false
-local hookedFlyoutFrames = setmetatable({}, { __mode = "k" })
-local hookedFlyoutButtons = setmetatable({}, { __mode = "k" })
+local flyoutButtonOverridesInstalled = false
+local originalFlyoutItemButtonUpdateState
+local originalFlyoutCurrencyButtonUpdateState
+local flyoutButtonStateCache = setmetatable({}, { __mode = "k" })
 
 local function GetCraftingPage()
     local professionsFrame = _G.ProfessionsFrame
@@ -43,13 +44,6 @@ local function RefreshCraftingForm()
     local schematicForm = GetSchematicForm()
     if not schematicForm or not schematicForm:IsShown() then
         return
-    end
-
-    if schematicForm.QualityDialog and schematicForm.QualityDialog.IsShown and schematicForm.QualityDialog:IsShown() then
-        local qd = schematicForm.QualityDialog
-        if qd.recipeID and qd.Setup then
-            pcall(qd.Setup, qd)
-        end
     end
 
     SafeCallMethod(schematicForm, "UpdateAllSlots")
@@ -132,10 +126,16 @@ local function IsFlyoutElementUnlocked(elementData, behavior)
 end
 
 local function UpdateFlyoutButtonState(button, count, elementData, behavior)
-    button.__simpleCraftSimElementData = elementData or button.__simpleCraftSimElementData
-    button.__simpleCraftSimBehavior = behavior or button.__simpleCraftSimBehavior
-    elementData = button.__simpleCraftSimElementData
-    behavior = button.__simpleCraftSimBehavior
+    if button and elementData and behavior then
+        flyoutButtonStateCache[button] = {
+            behavior = behavior,
+            elementData = elementData,
+        }
+    end
+
+    local cachedState = button and flyoutButtonStateCache[button] or nil
+    elementData = elementData or (cachedState and cachedState.elementData) or nil
+    behavior = behavior or (cachedState and cachedState.behavior) or nil
 
     local valid = behavior and behavior.IsElementValid and behavior:IsElementValid(elementData)
     if not valid then
@@ -144,9 +144,6 @@ local function UpdateFlyoutButtonState(button, count, elementData, behavior)
 
     if IsFlyoutElementUnlocked(elementData, behavior) then
         button.enabled = true
-        if button.SetEnabled then
-            button:SetEnabled(true)
-        end
         if button.DesaturateHierarchy then
             button:DesaturateHierarchy(0)
         end
@@ -157,89 +154,32 @@ local function UpdateFlyoutButtonState(button, count, elementData, behavior)
     end
 end
 
-local function HookFlyoutButton(button)
-    if not button or hookedFlyoutButtons[button] or type(button.UpdateState) ~= "function" then
+local function EnsureFlyoutButtonOverrides()
+    if flyoutButtonOverridesInstalled then
         return
     end
 
-    hookedFlyoutButtons[button] = true
-    hooksecurefunc(button, "UpdateState", function(self, count, elementData, behavior)
-        UpdateFlyoutButtonState(self, count, elementData, behavior)
-    end)
-end
+    local function InstallOverride(mixin, originalRefName)
+        if not mixin or type(mixin.UpdateState) ~= "function" then
+            return
+        end
 
-local function RefreshFlyoutButton(button)
-    if not button then
-        return
-    end
+        if originalRefName == "item" then
+            originalFlyoutItemButtonUpdateState = mixin.UpdateState
+        else
+            originalFlyoutCurrencyButtonUpdateState = mixin.UpdateState
+        end
 
-    HookFlyoutButton(button)
-    UpdateFlyoutButtonState(
-        button,
-        nil,
-        rawget(button, "elementData"),
-        rawget(button, "behavior")
-    )
-end
-
-local function RefreshFlyoutButtons(flyoutFrame)
-    if not flyoutFrame or not flyoutFrame.ScrollBox or type(flyoutFrame.ScrollBox.ForEachFrame) ~= "function" then
-        return
-    end
-
-    flyoutFrame.ScrollBox:ForEachFrame(RefreshFlyoutButton)
-end
-
-local function HookFlyoutFrame(flyoutFrame)
-    if not flyoutFrame or hookedFlyoutFrames[flyoutFrame] then
-        return
-    end
-
-    hookedFlyoutFrames[flyoutFrame] = true
-
-    if flyoutFrame.InitializeContents then
-        hooksecurefunc(flyoutFrame, "InitializeContents", function()
-            C_Timer.After(0, function()
-                RefreshFlyoutButtons(flyoutFrame)
-            end)
-        end)
-    end
-
-    if flyoutFrame.ScrollBox and type(flyoutFrame.ScrollBox.Update) == "function" then
-        hooksecurefunc(flyoutFrame.ScrollBox, "Update", function()
-            RefreshFlyoutButtons(flyoutFrame)
-        end)
-    end
-
-    C_Timer.After(0, function()
-        RefreshFlyoutButtons(flyoutFrame)
-    end)
-end
-
-local function HookFlyoutsOnParent(parent)
-    if not parent or not parent.GetChildren then
-        return
-    end
-
-    for _, child in next, { parent:GetChildren() } do
-        if child.InitializeContents and child.ScrollBox then
-            HookFlyoutFrame(child)
+        mixin.UpdateState = function(button, count, elementData, behavior)
+            local original = originalRefName == "item" and originalFlyoutItemButtonUpdateState or originalFlyoutCurrencyButtonUpdateState
+            original(button, count, elementData, behavior)
+            UpdateFlyoutButtonState(button, count, elementData, behavior)
         end
     end
-end
 
-local function EnsureFlyoutHooks()
-    if flyoutHooksInstalled then
-        return
-    end
-
-    if _G.OpenProfessionsItemFlyout then
-        hooksecurefunc("OpenProfessionsItemFlyout", function(parent)
-            HookFlyoutsOnParent(parent)
-        end)
-    end
-
-    flyoutHooksInstalled = true
+    InstallOverride(_G.ProfessionsFlyoutItemButtonMixin, "item")
+    InstallOverride(_G.ProfessionsFlyoutCurrencyButtonMixin, "currency")
+    flyoutButtonOverridesInstalled = true
 end
 
 local function SanitizeTransaction(transaction)
@@ -333,8 +273,8 @@ local function SanitizeVisibleReagentAllocations()
 end
 
 local function RefreshVisibleFlyouts()
-    for flyoutFrame in pairs(hookedFlyoutFrames) do
-        RefreshFlyoutButtons(flyoutFrame)
+    for button, buttonState in pairs(flyoutButtonStateCache) do
+        UpdateFlyoutButtonState(button, nil, buttonState.elementData, buttonState.behavior)
     end
 end
 
@@ -473,7 +413,6 @@ local function EnsureControls()
 
     UpdateControlState()
     ApplyElvUISkin()
-    HookFlyoutsOnParent(schematicForm)
 end
 
 local function HookProfessionsFrame()
@@ -506,14 +445,14 @@ frame:RegisterEvent("PLAYER_LOGIN")
 frame:SetScript("OnEvent", function(_, event, arg1)
     if event == "ADDON_LOADED" then
         if arg1 == "Blizzard_Professions" or arg1 == "Blizzard_ProfessionsTemplates" then
-            EnsureFlyoutHooks()
+            EnsureFlyoutButtonOverrides()
             C_Timer.After(0, HookProfessionsFrame)
         elseif arg1 == "ElvUI" then
             isElvUISkinned = false
             C_Timer.After(0, EnsureControls)
         end
     elseif event == "PLAYER_LOGIN" then
-        EnsureFlyoutHooks()
+        EnsureFlyoutButtonOverrides()
         C_Timer.After(0, HookProfessionsFrame)
     end
 end)
