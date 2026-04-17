@@ -1,4 +1,4 @@
-## Interface: 120001, 120000
+## Interface: 120001, 120000, 120005
 ## Title: SimpleCraftSim
 ## Notes: Adds a crafting unlock toggle to the professions crafting UI
 ## Notes-zhCN: 在专业制造界面添加解锁按钮

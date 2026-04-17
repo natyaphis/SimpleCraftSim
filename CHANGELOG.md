@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+- Updated addon version metadata.
+
 ## 1.1.5
 
 - Reworked unlock mode to use a lighter implementation centered on reagent quantity helpers and flyout button state updates.
